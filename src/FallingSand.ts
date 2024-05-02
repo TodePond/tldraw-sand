@@ -2,48 +2,54 @@ import { Editor } from "tldraw";
 import p5 from "p5";
 import { Geo, Particle, Sand, particles } from "./particles";
 
-type ParticleConstructor = new (p5: p5, x: number, y: number, worldSize: number, world: (Particle | null)[]) => Particle;
+type ParticleConstructor = new (
+  p5: p5,
+  x: number,
+  y: number,
+  worldSize: number,
+  world: (Particle | null)[]
+) => Particle;
 
 export class FallingSand {
-  editor: Editor
-  p5: p5
-  width: number
-  height: number
-  buffer: p5.Graphics | null = null
+  editor: Editor;
+  p5: p5;
+  width: number;
+  height: number;
+  buffer: p5.Graphics | null = null;
   cellSize = 10;
   worldSize = 200;
   world: (Particle | null)[];
-  particleTypes = particles
+  particleTypes = particles;
 
   constructor(editor: Editor) {
-    this.editor = editor
+    this.editor = editor;
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.world = new Array(this.worldSize * this.worldSize).fill(null);
 
     /** We mirror tldraw geometry to the particle world */
     editor.store.onAfterChange = (_, next, __) => {
-      if (next.typeName !== 'shape') return;
-      this.updateSolidShapes()
-    }
+      if (next.typeName !== "shape") return;
+      this.updateSolidShapes();
+    };
     editor.store.onAfterDelete = (prev, _) => {
-      if (prev.typeName !== 'shape') return;
-      this.updateSolidShapes()
-    }
+      if (prev.typeName !== "shape") return;
+      this.updateSolidShapes();
+    };
 
     this.p5 = new p5((sketch: p5) => {
       sketch.setup = () => {
         sketch.createCanvas(this.width, this.height);
         this.buffer = sketch.createGraphics(this.width, this.height);
 
-        this.createRandomSand(sketch)
+        this.createRandomSand(sketch);
       };
       sketch.draw = () => {
         if (!this.buffer) return;
 
         this.buffer.push();
         this.buffer.clear();
-        this.buffer.background('white');
+        this.buffer.background("white");
 
         // Align buffer with tldraw camera/scene
         const cam = this.editor.getCamera();
@@ -51,12 +57,16 @@ export class FallingSand {
         this.buffer.translate(cam.x, cam.y);
 
         // draw debug outline
-        this.buffer.rect(0, 0, this.worldSize * this.cellSize, this.worldSize * this.cellSize);
+        this.buffer.rect(
+          0,
+          0,
+          this.worldSize * this.cellSize,
+          this.worldSize * this.cellSize
+        );
 
-
-        this.handleInputs()
-        this.updateParticles()
-        this.drawParticles(this.buffer)
+        this.handleInputs();
+        this.updateParticles();
+        this.drawParticles(this.buffer);
         this.buffer.pop();
         sketch.image(this.buffer, 0, 0);
       };
@@ -65,14 +75,19 @@ export class FallingSand {
 
   handleInputs() {
     // Check if mouse is down and add particles
-    if (this.editor.getCurrentToolId() === 'sand' && this.editor.inputs.isPointing) {
+    if (
+      this.editor.getCurrentToolId() === "sand" &&
+      this.editor.inputs.isPointing &&
+      // only left click though!
+      this.editor.inputs.buttons.has(0)
+    ) {
       const path = this.editor.getPath() as keyof typeof this.particleTypes;
-      const parts = path.split('.')
-      const leaf = parts[parts.length - 1]
-      const type = this.particleTypes[leaf as keyof typeof this.particleTypes]
+      const parts = path.split(".");
+      const leaf = parts[parts.length - 1];
+      const type = this.particleTypes[leaf as keyof typeof this.particleTypes];
 
       if (type) {
-        this.addParticleAtPointer(type)
+        this.addParticleAtPointer(type);
       }
     }
   }
@@ -99,7 +114,12 @@ export class FallingSand {
     for (const cell of this.world) {
       if (cell) {
         buffer.fill(cell.color);
-        buffer.rect(cell.position.x * this.cellSize, cell.position.y * this.cellSize, this.cellSize, this.cellSize);
+        buffer.rect(
+          cell.position.x * this.cellSize,
+          cell.position.y * this.cellSize,
+          this.cellSize,
+          this.cellSize
+        );
       }
     }
   }
@@ -125,10 +145,10 @@ export class FallingSand {
     for (const shape of shapes) {
       const shapeGeo = this.editor.getShapeGeometry(shape);
       const vertices = shapeGeo.vertices;
-      const isClosed = shapeGeo.isClosed && shape.type !== 'arrow';
+      const isClosed = shapeGeo.isClosed && shape.type !== "arrow";
 
       // Apply rotation to the vertices
-      const rotatedVertices = vertices.map(vertex => {
+      const rotatedVertices = vertices.map((vertex) => {
         const cosAngle = Math.cos(shape.rotation);
         const sinAngle = Math.sin(shape.rotation);
         const rotatedX = vertex.x * cosAngle - vertex.y * sinAngle;
@@ -150,13 +170,22 @@ export class FallingSand {
         }
 
         // Iterate over the bounding box and fill the shape
-        for (let y = Math.floor(minY / this.cellSize); y <= Math.floor(maxY / this.cellSize); y++) {
+        for (
+          let y = Math.floor(minY / this.cellSize);
+          y <= Math.floor(maxY / this.cellSize);
+          y++
+        ) {
           const intersections: number[] = [];
           for (let i = 0; i < rotatedVertices.length; i++) {
             const v1 = rotatedVertices[i];
             const v2 = rotatedVertices[(i + 1) % rotatedVertices.length];
-            if ((v1.y < y * this.cellSize && v2.y >= y * this.cellSize) || (v2.y < y * this.cellSize && v1.y >= y * this.cellSize)) {
-              const x = v1.x + ((y * this.cellSize - v1.y) / (v2.y - v1.y)) * (v2.x - v1.x);
+            if (
+              (v1.y < y * this.cellSize && v2.y >= y * this.cellSize) ||
+              (v2.y < y * this.cellSize && v1.y >= y * this.cellSize)
+            ) {
+              const x =
+                v1.x +
+                ((y * this.cellSize - v1.y) / (v2.y - v1.y)) * (v2.x - v1.x);
               intersections.push(x);
             }
           }
@@ -165,7 +194,11 @@ export class FallingSand {
             const startX = Math.floor(intersections[i] / this.cellSize);
             const endX = Math.floor(intersections[i + 1] / this.cellSize);
             for (let x = startX; x <= endX; x++) {
-              this.setParticleInPageSpace(x * this.cellSize, y * this.cellSize, Geo);
+              this.setParticleInPageSpace(
+                x * this.cellSize,
+                y * this.cellSize,
+                Geo
+              );
             }
           }
         }
@@ -194,27 +227,47 @@ export class FallingSand {
   setParticleInPageSpace(x: number, y: number, particle: ParticleConstructor) {
     const gridX = Math.floor(x / this.cellSize);
     const gridY = Math.floor(y / this.cellSize);
-    if (gridX >= 0 && gridX < this.worldSize && gridY >= 0 && gridY < this.worldSize) {
-      const p = new particle(this.p5, gridX, gridY, this.worldSize, this.world)
+    if (
+      gridX >= 0 &&
+      gridX < this.worldSize &&
+      gridY >= 0 &&
+      gridY < this.worldSize
+    ) {
+      const p = new particle(this.p5, gridX, gridY, this.worldSize, this.world);
       this.world[this.worldIndex(gridX, gridY)] = p;
     }
   }
 
   addParticleAtPointer(particle: ParticleConstructor) {
-    const { x: pointerX, y: pointerY } = this.editor.inputs.currentPagePoint
-    const radius = 50;
+    const { x: pointerX, y: pointerY } = this.editor.inputs.currentPagePoint;
+    const radius = 6;
 
-    for (let i = 0; i < radius; i++) {
-      const angle = (i / radius) * 2 * Math.PI;
-      const particleX = pointerX + radius * Math.cos(angle);
-      const particleY = pointerY + radius * Math.sin(angle);
-      const gridX = Math.floor(particleX / this.cellSize);
-      const gridY = Math.floor(particleY / this.cellSize);
+    const pointerGridX = Math.floor(pointerX / this.cellSize);
+    const pointerGridY = Math.floor(pointerY / this.cellSize);
 
-      if (gridX >= 0 && gridX < this.worldSize && gridY >= 0 && gridY < this.worldSize) {
-        const p = new particle(this.p5, gridX, gridY, this.worldSize, this.world)
-        this.world[this.worldIndex(gridX, gridY)] = p;
+    for (let y = pointerGridY - radius; y < pointerGridY + radius; y++) {
+      for (let x = pointerGridX - radius; x < pointerGridX + radius; x++) {
+        const distance = Math.sqrt(
+          (x - pointerGridX) ** 2 + (y - pointerGridY) ** 2
+        );
+        if (distance < radius) {
+          const p = new particle(this.p5, x, y, this.worldSize, this.world);
+          this.world[this.worldIndex(x, y)] = p;
+        }
       }
     }
+
+    // for (let i = 0; i < radius; i++) {
+    //   const angle = (i / radius) * 2 * Math.PI;
+    //   const particleX = pointerX + radius * Math.cos(angle);
+    //   const particleY = pointerY + radius * Math.sin(angle);
+    //   const gridX = Math.floor(particleX / this.cellSize);
+    //   const gridY = Math.floor(particleY / this.cellSize);
+
+    //   if (gridX >= 0 && gridX < this.worldSize && gridY >= 0 && gridY < this.worldSize) {
+    //     const p = new particle(this.p5, gridX, gridY, this.worldSize, this.world)
+    //     this.world[this.worldIndex(gridX, gridY)] = p;
+    //   }
+    // }
   }
 }
