@@ -73,6 +73,8 @@ export class FallingSand {
     });
   }
 
+  previousPointer: { x: number; y: number } | null = { x: 0, y: 0 };
+
   handleInputs() {
     // Check if mouse is down and add particles
     if (
@@ -86,9 +88,31 @@ export class FallingSand {
       const leaf = parts[parts.length - 1];
       const type = this.particleTypes[leaf as keyof typeof this.particleTypes];
 
-      if (type) {
-        this.addParticleAtPointer(type);
+      const currentPointer = this.editor.inputs.currentPagePoint;
+      if (this.previousPointer) {
+        // if pointer has moved, add particles along the path
+        console.log("moved");
+        if (
+          currentPointer.x !== this.previousPointer.x ||
+          currentPointer.y !== this.previousPointer.y
+        ) {
+          const dx = currentPointer.x - this.previousPointer.x;
+          const dy = currentPointer.y - this.previousPointer.y;
+          const distance = Math.sqrt(dx ** 2 + dy ** 2);
+          const steps = Math.max(1, Math.floor(distance / this.cellSize));
+          for (let i = 0; i < steps; i++) {
+            const x = this.previousPointer.x + (dx * i) / steps;
+            const y = this.previousPointer.y + (dy * i) / steps;
+            this.addParticleAtPoint(type, { x, y });
+          }
+        }
       }
+      if (type) {
+        this.addParticleAtPoint(type, currentPointer);
+      }
+      this.previousPointer = { x: currentPointer.x, y: currentPointer.y };
+    } else {
+      this.previousPointer = null;
     }
   }
 
@@ -238,9 +262,13 @@ export class FallingSand {
     }
   }
 
-  addParticleAtPointer(particle: ParticleConstructor) {
-    const { x: pointerX, y: pointerY } = this.editor.inputs.currentPagePoint;
-    const radius = 6;
+  BRUSH_RADIUS = 6;
+  addParticleAtPoint(
+    particle: ParticleConstructor,
+    point: { x: number; y: number }
+  ) {
+    const { x: pointerX, y: pointerY } = point;
+    const radius = this.BRUSH_RADIUS;
 
     const pointerGridX = Math.floor(pointerX / this.cellSize);
     const pointerGridY = Math.floor(pointerY / this.cellSize);
